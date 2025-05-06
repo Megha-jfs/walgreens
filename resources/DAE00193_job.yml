@@ -19,11 +19,16 @@ resources:
           autoscale:
             min_workers: 2
             max_workers: 4
+      git_source:
+        git_url: https://github.com/Megha-jfs/walgreens.git
+        git_provider: GITHUB
+        git_branch: main
       tasks:
       - task_key: fetch_open_batch
         description: Check for open batch
         notebook_task:
           notebook_path: notebooks/fetch_open_batch
+          source: GIT
         timeout_seconds: 120
         retry_on_timeout: false
         job_cluster_key: DAE00193_job_cluster
@@ -31,6 +36,7 @@ resources:
         description: Mark job as inprogress
         notebook_task:
           notebook_path: notebooks/update_job_execution_detail
+          source: GIT
           base_parameters:
             status: IN_PROGRESS
         depends_on:
@@ -41,7 +47,10 @@ resources:
       - task_key: sql_execution_300_rad_scm_daily_waterfall_refresh_dashboard_new
         description: Execute SQL for 300_rad_scm_daily_waterfall_refresh_dashboard_new
         notebook_task:
-          notebook_path: /Workspace/Users/megha.upadhyay@walgreens.com/ProcessCtrlFramework/sqls/samplesqlscript0
+          notebook_path: notebooks/runner_main
+          source: GIT
+          base_parameters:
+            notebook_path: /Workspace/Users/megha.upadhyay@walgreens.com/ProcessCtrlFramework/sqls/samplesqlscript0
         depends_on:
         - task_key: update_job_execution_detail_inprogress
         timeout_seconds: 7200
@@ -50,7 +59,10 @@ resources:
       - task_key: sql_execution_300_rad_scm_daily_waterfall_refresh_dashboard_new_30_days
         description: Execute SQL for 300_rad_scm_daily_waterfall_refresh_dashboard_new_30_days
         notebook_task:
-          notebook_path: /Workspace/Users/megha.upadhyay@walgreens.com/ProcessCtrlFramework/sqls/samplesqlscript1
+          notebook_path: notebooks/runner_main
+          source: GIT
+          base_parameters:
+            notebook_path: /Workspace/Users/megha.upadhyay@walgreens.com/ProcessCtrlFramework/sqls/samplesqlscript1
         depends_on:
         - task_key: sql_execution_300_rad_scm_daily_waterfall_refresh_dashboard_new
         timeout_seconds: 7200
@@ -59,7 +71,10 @@ resources:
       - task_key: sql_execution_300_rad_scm_daily_waterfall_refresh_wag_pick_ship
         description: Execute SQL for 300_rad_scm_daily_waterfall_refresh_wag_pick_ship
         notebook_task:
-          notebook_path: /Workspace/Users/megha.upadhyay@walgreens.com/ProcessCtrlFramework/sqls/samplesqlscript2
+          notebook_path: notebooks/runner_main
+          source: GIT
+          base_parameters:
+            notebook_path: /Workspace/Users/megha.upadhyay@walgreens.com/ProcessCtrlFramework/sqls/samplesqlscript2
         depends_on:
         - task_key: sql_execution_300_rad_scm_daily_waterfall_refresh_dashboard_new_30_days
         timeout_seconds: 7200
@@ -68,7 +83,10 @@ resources:
       - task_key: sql_execution_300_rad_scm_daily_waterfall_refresh_dashboard_promo_flag
         description: Execute SQL for 300_rad_scm_daily_waterfall_refresh_dashboard_promo_flag
         notebook_task:
-          notebook_path: /Workspace/Users/megha.upadhyay@walgreens.com/ProcessCtrlFramework/sqls/samplesqlscript3
+          notebook_path: notebooks/runner_main
+          source: GIT
+          base_parameters:
+            notebook_path: /Workspace/Users/megha.upadhyay@walgreens.com/ProcessCtrlFramework/sqls/samplesqlscript3
         depends_on:
         - task_key: sql_execution_300_rad_scm_daily_waterfall_refresh_wag_pick_ship
         timeout_seconds: 7200
@@ -77,7 +95,10 @@ resources:
       - task_key: sql_execution_300_rad_scm_daily_waterfall_refresh_dashboard_new_sf
         description: Execute SQL for 300_rad_scm_daily_waterfall_refresh_dashboard_new_sf
         notebook_task:
-          notebook_path: /Workspace/Users/megha.upadhyay@walgreens.com/ProcessCtrlFramework/sqls/samplesqlscript4
+          notebook_path: notebooks/runner_main
+          source: GIT
+          base_parameters:
+            notebook_path: /Workspace/Users/megha.upadhyay@walgreens.com/ProcessCtrlFramework/sqls/samplesqlscript4
         depends_on:
         - task_key: sql_execution_300_rad_scm_daily_waterfall_refresh_dashboard_promo_flag
         timeout_seconds: 7200
@@ -87,6 +108,7 @@ resources:
         description: Mark job as completed
         notebook_task:
           notebook_path: notebooks/update_job_execution_detail
+          source: GIT
           base_parameters:
             status: COMPLETED
         depends_on:

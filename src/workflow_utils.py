@@ -54,6 +54,11 @@ def create_workflow_bundle(workflow_name, tasks, job_parameters=None, project_ro
                                 }
                             }
                         ],
+                        "git_source": {
+                            "git_url": "https://github.com/Megha-jfs/walgreens.git",
+                            "git_provider": "GITHUB",
+                            "git_branch": "main"
+                        },
                         "tasks": []
                     }
                 }
@@ -100,7 +105,8 @@ def build_workflow_tasks(proj_id, dept_id, job_id, child_jobs, notebook_paths):
         "task_key": "fetch_open_batch",
         "description": "Check for open batch",
         "notebook_task": {
-            "notebook_path": "/notebooks/fetch_open_batch"
+            "notebook_path": "notebooks/fetch_open_batch",
+            "source": "GIT"
         },
         "timeout_seconds": 120,
         "retry_on_timeout": False
@@ -112,7 +118,8 @@ def build_workflow_tasks(proj_id, dept_id, job_id, child_jobs, notebook_paths):
         "task_key": "update_job_execution_detail_inprogress",
         "description": "Mark job as inprogress",
         "notebook_task": {
-            "notebook_path": "/notebooks/update_job_execution_detail",
+            "notebook_path": "notebooks/update_job_execution_detail",
+            "source": "GIT",
             "base_parameters": {
                 # "proj_id": str(proj_id),
                 # "dept_id": str(dept_id),
@@ -142,12 +149,11 @@ def build_workflow_tasks(proj_id, dept_id, job_id, child_jobs, notebook_paths):
             "task_key": f"sql_execution_{child_name}",
             "description": f"Execute SQL for {child_name}",
             "notebook_task": {
-                "notebook_path": notebook_path,
-                # "base_parameters": {
-                #     "proj_id": str(proj_id),
-                #     "dept_id": str(dept_id),
-                #     "job_id": child_name
-                # }
+                "notebook_path": "notebooks/runner_main",
+                "source": "GIT",
+                "base_parameters": {
+                    "notebook_path": notebook_path
+                }
             },
             "depends_on": [
                 {"task_key": previous_task}
@@ -163,7 +169,8 @@ def build_workflow_tasks(proj_id, dept_id, job_id, child_jobs, notebook_paths):
         "task_key": "update_job_execution_detail_completed",
         "description": "Mark job as completed",
         "notebook_task": {
-            "notebook_path": "/notebooks/update_job_execution_detail",
+            "notebook_path": "notebooks/update_job_execution_detail",
+            "source": "GIT",
             "base_parameters": {
                 "status": "COMPLETED"
             }
