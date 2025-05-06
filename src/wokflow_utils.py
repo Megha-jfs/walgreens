@@ -1,4 +1,3 @@
-# Utility functions for workflow operations using Databricks Asset Bundles
 import os
 import yaml
 from datetime import datetime
@@ -17,10 +16,12 @@ def create_workflow_bundle(workflow_name, tasks, job_parameters=None, bundle_roo
     """
     try:
         # Create directory structure
-        bundle_dir = os.path.join(bundle_root, workflow_name)
-        resources_dir = os.path.join(bundle_dir, "resources")
+        # bundle_dir = os.path.join(bundle_root, workflow_name)
+        # resources_dir = os.path.join(bundle_dir, "resources")
         
-        os.makedirs(resources_dir, exist_ok=True)
+        # os.makedirs(resources_dir, exist_ok=True)
+
+        resources_dir = bundle_root
         
         # Create job definition file with cluster configuration
         job_config = {
@@ -32,18 +33,21 @@ def create_workflow_bundle(workflow_name, tasks, job_parameters=None, bundle_roo
                             {
                                 "job_cluster_key": f"{workflow_name}_job_cluster",
                                 "new_cluster": {
-                                    "spark_version": "13.3.x-scala2.12",
-                                    "node_type_id": "Standard_DS3_v2",
-                                    "num_workers": 2,
-                                    "spark_conf": {
-                                        "spark.databricks.delta.preview.enabled": "true",
-                                        "spark.databricks.delta.properties.defaults.enableChangeDataFeed": "true"
-                                    },
+                                    "spark_version": "15.4.x-scala2.12",
+                                    " azure_attributes": {
+                                        "first_on_demand": 1,
+                                        "availability": "SPOT_WITH_FALLBACK_AZURE",
+                                        "spot_bid_max_price": "-1"
+                                    }
+                                    "node_type_id": "Standard_D4ds_v5",
                                     "spark_env_vars": {
                                         "PYSPARK_PYTHON": "/databricks/python3/bin/python3"
                                     },
+                                    "enable_elastic_disk": "true",
+                                    "data_security_mode": "USER_ISOLATION",
+                                    "runtime_engine": "STANDARD",
                                     "autoscale": {
-                                        "min_workers": 1,
+                                        "min_workers": 2,
                                         "max_workers": 4
                                     }
                                 }
@@ -54,7 +58,7 @@ def create_workflow_bundle(workflow_name, tasks, job_parameters=None, bundle_roo
                 }
             }
         }
-        
+
         # Update all tasks to use the job cluster
         for task in tasks:
             # Add job cluster reference to each task
@@ -85,49 +89,48 @@ def create_workflow_bundle(workflow_name, tasks, job_parameters=None, bundle_roo
         print(f"Error creating workflow bundle: {str(e)}")
         return None
 
-def build_workflow_tasks(proj_id, dept_id, job_id, batch_id, child_jobs, notebook_paths):
+def build_workflow_tasks(proj_id, dept_id, job_id, child_jobs, notebook_paths):
     """Build tasks for the workflow including batch check, status update, and SQL tasks"""
     tasks = []
     
     # Task 1: Batch check
-    batch_check_task = {
-        "task_key": "batch_check",
+    fetch_open_batch = {
+        "task_key": "fetch_open_batch",
         "description": "Check for open batch",
         "notebook_task": {
-            "notebook_path": "/Shared/ProcessControl/notebooks/batch_check",
+            "notebook_path": "notebooks/fetch_open_batch",
             "base_parameters": {
-                "batch_id": str(batch_id)
             }
         },
         "timeout_seconds": 120,
         "retry_on_timeout": False
     }
-    tasks.append(batch_check_task)
+    tasks.append(fetch_open_batch)
     
-    # Task 2: Status update (mark as running)
-    status_update_task = {
-        "task_key": "status_update_start",
-        "description": "Mark job as running",
+    # Task 2: Status update (mark as inprogress)
+    update_job_execution_detail_inprogress = {
+        "task_key": "update_job_execution_detail_inprogress",
+        "description": "Mark job as inprogress",
         "notebook_task": {
-            "notebook_path": "/Shared/ProcessControl/notebooks/status_update",
+            "notebook_path": notebooks/update_job_execution_detail",
             "base_parameters": {
                 "proj_id": str(proj_id),
                 "dept_id": str(dept_id),
                 "job_id": job_id,
                 "batch_id": str(batch_id),
-                "status": "RUNNING"
+                "status": "IN_PROGRESS"
             }
         },
         "depends_on": [
-            {"task_key": "batch_check"}
+            {"task_key": "fetch_open_batch"}
         ],
         "timeout_seconds": 120,
         "retry_on_timeout": False
     }
-    tasks.append(status_update_task)
+    tasks.append(update_job_execution_detail_inprogress)
     
     # Tasks 3+: SQL execution tasks
-    previous_task = "status_update_start"
+    previous_task = "update_job_execution_detail_inprogress"
     for i, child in enumerate(child_jobs):
         child_name = child["name"]
         notebook_path = notebook_paths.get(child_name)
@@ -144,8 +147,7 @@ def build_workflow_tasks(proj_id, dept_id, job_id, batch_id, child_jobs, noteboo
                 "base_parameters": {
                     "proj_id": str(proj_id),
                     "dept_id": str(dept_id),
-                    "job_id": child_name,
-                    "batch_id": str(batch_id)
+                    "job_id": child_name
                 }
             },
             "depends_on": [
@@ -158,16 +160,15 @@ def build_workflow_tasks(proj_id, dept_id, job_id, batch_id, child_jobs, noteboo
         previous_task = f"sql_execution_{child_name}"
     
     # Final task: Status update (mark as completed)
-    status_update_final_task = {
-        "task_key": "status_update_complete",
+    update_job_execution_detail_completed = {
+        "task_key": "update_job_execution_detail_completed",
         "description": "Mark job as completed",
         "notebook_task": {
-            "notebook_path": "/Shared/ProcessControl/notebooks/status_update",
+            "notebook_path": "notebooks/update_job_execution_detail",
             "base_parameters": {
                 "proj_id": str(proj_id),
                 "dept_id": str(dept_id),
                 "job_id": job_id,
-                "batch_id": str(batch_id),
                 "status": "COMPLETED"
             }
         },
@@ -177,6 +178,6 @@ def build_workflow_tasks(proj_id, dept_id, job_id, batch_id, child_jobs, noteboo
         "timeout_seconds": 120,
         "retry_on_timeout": False
     }
-    tasks.append(status_update_final_task)
+    tasks.append(update_job_execution_detail_completed)
     
     return tasks
