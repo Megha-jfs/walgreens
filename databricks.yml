@@ -1,0 +1,55 @@
+bundle:
+  name: process_control_framework
+
+include:
+  - resources/*.yml
+
+variables:
+  git_branch:
+    default: main
+  service_principal_name_dev:
+    default: "megha.upadhyay@walgreens.com"
+  service_principal_name_prod:
+    default: "megha.upadhyay@walgreens.com"
+
+targets:
+  dev:
+    mode: development
+    presets:
+      name_prefix: '[${workspace.current_user.short_name}] '
+    default: true
+    variables:
+      git_branch: ${bundle.git.branch}
+    run_as:
+      service_principal_name: ${var.service_principal_name_dev}
+    workspace:
+      host: "https://adb-5346339970823458.18.azuredatabricks.net/"
+      root_path: /Workspace/Users/${var.service_principal_name_dev}/.bundle/${bundle.name}
+    permissions:
+      - level: CAN_RUN
+        group_name: users
+      - level: CAN_MANAGE
+        group_name: databricks
+      - level: CAN_RUN
+        service_principal_name: ${var.service_principal_name_dev}
+      - level: CAN_MANAGE
+        service_principal_name: ${var.service_principal_name_dev}
+
+  prod:
+    mode: production    
+    presets:
+      name_prefix: '[prod] ' 
+    run_as:
+      service_principal_name: ${var.service_principal_name_prod}
+    workspace:
+      host: "https://adb-5346339970823458.18.azuredatabricks.net/" 
+      root_path: /Workspace/Users/${var.service_principal_name_prod}/.bundle/${bundle.name}
+    permissions:
+       - level: CAN_RUN
+         service_principal_name: ${var.service_principal_name_prod}
+       - level: CAN_MANAGE
+         service_principal_name: ${var.service_principal_name_prod}
+       - level: CAN_VIEW
+         group_name: users
+       - level: CAN_VIEW
+         group_name: databricks

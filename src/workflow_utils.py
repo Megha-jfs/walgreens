@@ -2,7 +2,7 @@ import os
 import yaml
 from datetime import datetime
 
-def create_workflow_bundle(workflow_name, tasks, job_parameters=None, bundle_root="./dabs"):
+def create_workflow_bundle(workflow_name, tasks, job_parameters=None, project_root_path=None):
     """Create a Databricks Asset Bundle with the given tasks and job-level parameters
     
     Args:
@@ -16,12 +16,13 @@ def create_workflow_bundle(workflow_name, tasks, job_parameters=None, bundle_roo
     """
     try:
         # Create directory structure
-        # bundle_dir = os.path.join(bundle_root, workflow_name)
-        # resources_dir = os.path.join(bundle_dir, "resources")
-        
-        # os.makedirs(resources_dir, exist_ok=True)
 
-        resources_dir = bundle_root
+        resources_dir = os.path.join(project_root_path, "resources")
+        # os.makedirs(resources_dir, exist_ok=True)
+        print(f"Created directory structure at {resources_dir}")
+
+        job_yaml_path = os.path.join(resources_dir, f"{workflow_name}_job.yml")
+        print(f"Writing job config to {job_yaml_path}")
         
         # Create job definition file with cluster configuration
         job_config = {
@@ -38,7 +39,7 @@ def create_workflow_bundle(workflow_name, tasks, job_parameters=None, bundle_roo
                                         "first_on_demand": 1,
                                         "availability": "SPOT_WITH_FALLBACK_AZURE",
                                         "spot_bid_max_price": "-1"
-                                    }
+                                    },
                                     "node_type_id": "Standard_D4ds_v5",
                                     "spark_env_vars": {
                                         "PYSPARK_PYTHON": "/databricks/python3/bin/python3"
@@ -78,13 +79,14 @@ def create_workflow_bundle(workflow_name, tasks, job_parameters=None, bundle_roo
             job_config["resources"]["jobs"][workflow_name]["parameters"] = job_params_formatted
         
         # Write the job configuration file
-        with open(os.path.join(resources_dir, f"{workflow_name}_job.yml"), "w") as f:
+        print("going to write yaml file")
+        with open(job_yaml_path, "w") as f:
             yaml.dump(job_config, f, default_flow_style=False, sort_keys=False)
         
         print(f"Successfully created workflow job config in {resources_dir}/{workflow_name}_job.yml")
         print(f"Note: Use this with your manually created databricks.yml file")
         
-        return bundle_dir
+        return True
     except Exception as e:
         print(f"Error creating workflow bundle: {str(e)}")
         return None
@@ -98,9 +100,7 @@ def build_workflow_tasks(proj_id, dept_id, job_id, child_jobs, notebook_paths):
         "task_key": "fetch_open_batch",
         "description": "Check for open batch",
         "notebook_task": {
-            "notebook_path": "notebooks/fetch_open_batch",
-            "base_parameters": {
-            }
+            "notebook_path": "/notebooks/fetch_open_batch"
         },
         "timeout_seconds": 120,
         "retry_on_timeout": False
@@ -112,12 +112,11 @@ def build_workflow_tasks(proj_id, dept_id, job_id, child_jobs, notebook_paths):
         "task_key": "update_job_execution_detail_inprogress",
         "description": "Mark job as inprogress",
         "notebook_task": {
-            "notebook_path": notebooks/update_job_execution_detail",
+            "notebook_path": "/notebooks/update_job_execution_detail",
             "base_parameters": {
-                "proj_id": str(proj_id),
-                "dept_id": str(dept_id),
-                "job_id": job_id,
-                "batch_id": str(batch_id),
+                # "proj_id": str(proj_id),
+                # "dept_id": str(dept_id),
+                # "job_id": job_id,
                 "status": "IN_PROGRESS"
             }
         },
@@ -144,11 +143,11 @@ def build_workflow_tasks(proj_id, dept_id, job_id, child_jobs, notebook_paths):
             "description": f"Execute SQL for {child_name}",
             "notebook_task": {
                 "notebook_path": notebook_path,
-                "base_parameters": {
-                    "proj_id": str(proj_id),
-                    "dept_id": str(dept_id),
-                    "job_id": child_name
-                }
+                # "base_parameters": {
+                #     "proj_id": str(proj_id),
+                #     "dept_id": str(dept_id),
+                #     "job_id": child_name
+                # }
             },
             "depends_on": [
                 {"task_key": previous_task}
@@ -164,11 +163,8 @@ def build_workflow_tasks(proj_id, dept_id, job_id, child_jobs, notebook_paths):
         "task_key": "update_job_execution_detail_completed",
         "description": "Mark job as completed",
         "notebook_task": {
-            "notebook_path": "notebooks/update_job_execution_detail",
+            "notebook_path": "/notebooks/update_job_execution_detail",
             "base_parameters": {
-                "proj_id": str(proj_id),
-                "dept_id": str(dept_id),
-                "job_id": job_id,
                 "status": "COMPLETED"
             }
         },
