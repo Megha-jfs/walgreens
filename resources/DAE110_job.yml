@@ -6,6 +6,15 @@ resources:
         git_url: https://github.com/Megha-jfs/walgreens.git
         git_provider: GITHUB
         git_branch: main
+      parameters:
+      - name: env
+        default: dev
+      - name: proj_id
+        default: testproj1
+      - name: dept_id
+        default: testdept1
+      - name: job_id
+        default: testjob1
       tasks:
       - task_key: batch_check
         description: Check for open batch
@@ -29,11 +38,16 @@ resources:
           notebook_path: notebooks/runner_main
           source: GIT
           base_parameters:
+            env: dev
+            proj_id: testproj1
+            dept_id: testdept1
+            job_id: testjob1
             catalog_name: dev
             schema_name: test_schema1
             notebook_path: scripts/sqls/samplesqlscript1
         timeout_seconds: 7200
-        depends_on: []
+        depends_on:
+        - task_key: status_update_in_progress
         job_cluster_key: DAE110_job_cluster
       - task_key: samplesqlscript2
         description: 'Execute task: samplesqlscript2'
@@ -41,6 +55,10 @@ resources:
           notebook_path: notebooks/runner_main
           source: GIT
           base_parameters:
+            env: dev
+            proj_id: testproj1
+            dept_id: testdept1
+            job_id: testjob1
             catalog_name: dev
             schema_name: test_schema2
             notebook_path: scripts/sqls/samplesqlscript2
