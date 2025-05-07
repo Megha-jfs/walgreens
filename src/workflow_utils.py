@@ -12,7 +12,7 @@ def create_workflow_yaml(esp_job_id: str, parent_info: Dict, child_jobs: List[Di
         os.makedirs(resources_dir, exist_ok=True)
 
         # Generate workflow name
-        workflow_name = f"{esp_job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        workflow_name = f"{esp_job_id}"
         job_yaml_path = os.path.join(resources_dir, f"{workflow_name}_job.yml")
 
         # Initialize job configuration
@@ -118,8 +118,15 @@ def _process_child_job(child: Dict, job_clusters: List, seen_clusters: set) -> D
     }
 
     # Add dependencies
-    if child.get("depends_on"):
-        task_config["depends_on"] = [{"task_key": dep} for dep in child["depends_on"]]
+    depends_on = child.get("depends_on", [])
+
+    if not depends_on and child.get("invocation_id") == 1:
+        depends_on = ["status_update_in_progress"]
+    elif depends_on:
+        if isinstance(depends_on, str):
+            depends_on = [d.strip() for d in depends_on.strip("[]").split(",")]
+    
+    task_config["depends_on"] = [{"task_key": dep} for dep in depends_on]
 
     # Add cluster configuration
     if child.get("cluster_info"):
