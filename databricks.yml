@@ -9,6 +9,8 @@ variables:
     default: main
   service_principal_name_dev:
     default: "megha.upadhyay@walgreens.com"
+  service_principal_name_qa:
+    default: "megha.upadhyay@walgreens.com"
   service_principal_name_prod:
     default: "megha.upadhyay@walgreens.com"
 
