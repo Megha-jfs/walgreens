@@ -1,14 +1,10 @@
-# workflow_utils.py
 import os
 import yaml
 from datetime import datetime
 
 def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, project_root_path: str) -> str:
     """
-    Create Databricks workflow YAML with dynamic configurations.
-    - Job params are only set at job level (not redundantly at task level).
-    - Task params are passed only if they are not job params.
-    - Runner logic, cluster configs, libraries, and dependencies are handled.
+    Create Databricks workflow YAML with complex dependencies including parallel paths.
     """
     try:
         # Create resources directory
@@ -16,7 +12,7 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, p
         os.makedirs(resources_dir, exist_ok=True)
 
         # Generate workflow name
-        workflow_name = f"{esp_job_id}"
+        workflow_name = f"{esp_job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         job_yaml_path = os.path.join(resources_dir, f"{workflow_name}_job.yml")
 
         # Initialize job configuration
@@ -76,9 +72,10 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, p
         # Process child jobs
         job_clusters = []
         seen_clusters = set()
-        previous_task = "status_update_in_progress"  # For default dependency
-
-        for idx, child in enumerate(child_jobs):
+        task_names = {child["task_name"] for child in child_jobs}  # Set of all task names
+        
+        # First pass: Create all tasks without dependencies
+        for child in child_jobs:
             # Get set of job-level parameter keys
             job_param_keys = set(job_params.keys())
             # Only include task-specific parameters (exclude job params)
@@ -103,18 +100,6 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, p
                 "timeout_seconds": 7200
             }
 
-            # Handle dependencies
-            depends_on = child.get("depends_on", [])
-            if not depends_on or depends_on == ['']:
-                if idx == 0:
-                    depends_on = ["status_update_in_progress"]
-                else:
-                    depends_on = [previous_task]
-            if isinstance(depends_on, str):
-                depends_on = [d.strip() for d in depends_on.strip("[]").replace("'", "").split(",") if d.strip()]
-            task_config["depends_on"] = [{"task_key": dep} for dep in depends_on if dep]
-            previous_task = child["task_name"]
-
             # Add cluster configuration
             if child.get("cluster_info") and "job_cluster_key" in child["cluster_info"]:
                 cluster_key = child["cluster_info"]["job_cluster_key"]
@@ -123,7 +108,7 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, p
                     seen_clusters.add(cluster_key)
                 task_config["job_cluster_key"] = cluster_key
 
-            # Add libraries if specified (placeholder logic)
+            # Add libraries if specified
             if child.get("libraries"):
                 task_config["libraries"] = [
                     {"jar": lib} if lib.startswith("dbfs:") else {"pypi": {"package": lib}}
@@ -131,8 +116,51 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, p
                 ]
 
             job_config["resources"]["jobs"][workflow_name]["tasks"].append(task_config)
+        
+        # Second pass: Add dependencies
+        for task in job_config["resources"]["jobs"][workflow_name]["tasks"]:
+            if task["task_key"] not in ["batch_check", "status_update_in_progress", "status_update_completed"]:
+                # Find the corresponding child job
+                child = next((c for c in child_jobs if c["task_name"] == task["task_key"]), None)
+                
+                if child:
+                    # Process dependencies
+                    depends_on = child.get("depends_on", [])
+                    
+                    # Default dependencies for tasks with no explicit dependencies
+                    if not depends_on or depends_on == ['']:
+                        # Default to status_update_in_progress if no dependencies specified
+                        task["depends_on"] = [{"task_key": "status_update_in_progress"}]
+                    else:
+                        # Parse dependencies if they're in string format
+                        if isinstance(depends_on, str):
+                            depends_on = [d.strip() for d in depends_on.strip("[]").replace("'", "").split(",") if d.strip()]
+                        
+                        # Validate dependencies exist in our task list
+                        valid_deps = [dep for dep in depends_on if dep in task_names or dep in ["batch_check", "status_update_in_progress"]]
+                        
+                        if valid_deps:
+                            task["depends_on"] = [{"task_key": dep} for dep in valid_deps]
+                        else:
+                            # Default to status_update_in_progress if no valid dependencies
+                            task["depends_on"] = [{"task_key": "status_update_in_progress"}]
 
-        # Add final status update task
+        # Add final status update task that depends on all leaf tasks
+        # Leaf tasks are those that no other task depends on
+        dependent_tasks = set()
+        for child in child_jobs:
+            depends_on = child.get("depends_on", [])
+            if isinstance(depends_on, str):
+                depends_on = [d.strip() for d in depends_on.strip("[]").replace("'", "").split(",") if d.strip()]
+            dependent_tasks.update(depends_on)
+        
+        # Find leaf tasks (not appearing in any dependencies)
+        leaf_tasks = [child["task_name"] for child in child_jobs if child["task_name"] not in dependent_tasks]
+        
+        # If no leaf tasks found, use the last task alphabetically
+        if not leaf_tasks and child_jobs:
+            leaf_tasks = [max([child["task_name"] for child in child_jobs])]
+        
         final_status_task = {
             "task_key": "status_update_completed",
             "description": "Mark job as COMPLETED",
@@ -141,7 +169,7 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, p
                 "source": "GIT",
                 "base_parameters": {"status": "COMPLETED"}
             },
-            "depends_on": [{"task_key": previous_task}],
+            "depends_on": [{"task_key": task} for task in leaf_tasks],
             "timeout_seconds": 120
         }
         job_config["resources"]["jobs"][workflow_name]["tasks"].append(final_status_task)
