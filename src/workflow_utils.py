@@ -1,6 +1,6 @@
-# workflow_utils.py
 import os
 import yaml
+import json
 from datetime import datetime
 
 def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, project_root_path: str) -> str:
@@ -73,7 +73,7 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, p
         # Process child jobs
         job_clusters = []
         seen_clusters = set()
-        task_names = {child["task_name"] for child in child_jobs}  # Set of all task names
+        task_mapping = {}  # To track task keys for validation
         
         # First pass: Create all tasks without dependencies
         for child in child_jobs:
@@ -117,51 +117,55 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, p
                 ]
 
             job_config["resources"]["jobs"][workflow_name]["tasks"].append(task_config)
+            task_mapping[child["task_name"]] = task_config
         
-        # Second pass: Add dependencies
-        for task in job_config["resources"]["jobs"][workflow_name]["tasks"]:
-            if task["task_key"] not in ["batch_check", "status_update_in_progress", "status_update_completed"]:
-                # Find the corresponding child job
-                child = next((c for c in child_jobs if c["task_name"] == task["task_key"]), None)
-                
-                if child:
-                    # Process dependencies
-                    depends_on = child.get("depends_on", [])
-                    
-                    # Default dependencies for tasks with no explicit dependencies
-                    if not depends_on or depends_on == ['']:
-                        # Default to status_update_in_progress if no dependencies specified
-                        task["depends_on"] = [{"task_key": "status_update_in_progress"}]
-                    else:
-                        # Parse dependencies if they're in string format
-                        if isinstance(depends_on, str):
-                            depends_on = [d.strip() for d in depends_on.strip("[]").replace("'", "").split(",") if d.strip()]
-                        
-                        # Validate dependencies exist in our task list
-                        valid_deps = [dep for dep in depends_on if dep in task_names or dep in ["batch_check", "status_update_in_progress"]]
-                        
-                        if valid_deps:
-                            task["depends_on"] = [{"task_key": dep} for dep in valid_deps]
-                        else:
-                            # Default to status_update_in_progress if no valid dependencies
-                            task["depends_on"] = [{"task_key": "status_update_in_progress"}]
-
-        # Add final status update task that depends on all leaf tasks
-        # Leaf tasks are those that no other task depends on
-        dependent_tasks = set()
+        # Second pass: Process dependencies correctly
         for child in child_jobs:
-            depends_on = child.get("depends_on", [])
-            if isinstance(depends_on, str):
-                depends_on = [d.strip() for d in depends_on.strip("[]").replace("'", "").split(",") if d.strip()]
-            dependent_tasks.update(depends_on)
+            task_key = child["task_name"]
+            task = next((t for t in job_config["resources"]["jobs"][workflow_name]["tasks"] 
+                        if t.get("task_key") == task_key), None)
+            
+            if task:
+                # Get dependencies
+                depends_on = child.get("depends_on", [])
+                
+                # Parse dependencies if string format
+                if isinstance(depends_on, str):
+                    # Handle different string formats:
+                    depends_on = depends_on.strip("[]").replace("'", "").replace('"', "")
+                    depends_on = [d.strip() for d in depends_on.split(",") if d.strip()]
+                
+                # If task has dependencies specified, use them
+                if depends_on:
+                    # Filter to only include valid task keys
+                    valid_deps = [dep for dep in depends_on 
+                                if dep in task_mapping or dep in ["batch_check", "status_update_in_progress"]]
+                    if valid_deps:
+                        task["depends_on"] = [{"task_key": dep} for dep in valid_deps]
+                    else:
+                        # Default to status_update_in_progress if no valid dependencies
+                        task["depends_on"] = [{"task_key": "status_update_in_progress"}]
+                else:
+                    # Default to status_update_in_progress for tasks with no deps
+                    task["depends_on"] = [{"task_key": "status_update_in_progress"}]
         
-        # Find leaf tasks (not appearing in any dependencies)
-        leaf_tasks = [child["task_name"] for child in child_jobs if child["task_name"] not in dependent_tasks]
+        # Find leaf tasks (tasks that no other task depends on)
+        all_dependencies = set()
+        for task in job_config["resources"]["jobs"][workflow_name]["tasks"]:
+            if "depends_on" in task:
+                all_dependencies.update([dep["task_key"] for dep in task["depends_on"]])
         
-        # If no leaf tasks found, use the last task alphabetically
-        if not leaf_tasks and child_jobs:
-            leaf_tasks = [max([child["task_name"] for child in child_jobs])]
+        # Tasks that are not dependencies of any other task are leaf tasks
+        leaf_tasks = [task["task_key"] for task in job_config["resources"]["jobs"][workflow_name]["tasks"] 
+                    if task["task_key"] not in all_dependencies 
+                    and task["task_key"] not in ["batch_check", "status_update_in_progress", "status_update_completed"]]
         
+        # If no leaf tasks found, default to all script tasks
+        if not leaf_tasks:
+            leaf_tasks = [task["task_key"] for task in job_config["resources"]["jobs"][workflow_name]["tasks"]
+                        if task["task_key"] not in ["batch_check", "status_update_in_progress", "status_update_completed"]]
+        
+        # Add final status update task that depends on leaf tasks
         final_status_task = {
             "task_key": "status_update_completed",
             "description": "Mark job as COMPLETED",
@@ -188,4 +192,6 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, p
 
     except Exception as e:
         print(f"Error creating workflow YAML: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None
