@@ -1,12 +1,12 @@
 import json
 
 def get_job_details(spark, esp_job_id):
-    """Get parent and child job details from job_parameter_detail table for a given esp_job_id"""
+    """Get parent and child job details from data_migration_validator_dev.test_megha.job_parameter_detail table for a given esp_job_id"""
     try:
         # Get parent job details
         parent_df = spark.sql(f"""
             SELECT proj_id, dept_id, job_id, parameter_value
-            FROM job_parameter_detail
+            FROM data_migration_validator_dev.test_megha.job_parameter_detail
             WHERE esp_job_id = '{esp_job_id}' 
             AND job_type = 'parent'
             ORDER BY invocation_id
@@ -18,19 +18,35 @@ def get_job_details(spark, esp_job_id):
         
         parent_row = parent_df.first()
         
+        print(f"parent_row: {parent_row}")
+
+        # Set job param variables
+        proj_id = parent_row.proj_id
+        dept_id = parent_row.dept_id
+        job_id = parent_row.job_id
+
+        print(f"proj_id: {proj_id}")
+        print(f"dept_id: {dept_id}")
+        print(f"job_id: {job_id}")
+
+        print(type(parent_row.parameter_value))
+
         # Get job parameters from parameter_value if it exists
         job_params = {}
         if parent_row.parameter_value:
             try:
                 job_params = json.loads(parent_row.parameter_value)
-            except:
+            except json.JSONDecodeError:
                 print(f"Error parsing job parameters: {parent_row.parameter_value}")
         
+        print(f"job_params: {job_params}")
+        print(type(job_params))
+
         # Get all child jobs
         child_df = spark.sql(f"""
             SELECT job_id, invocation_id, use_runner, notebook_path, 
                   cluster_details, dependent_libraries, parameter_type, parameter_value
-            FROM job_parameter_detail
+            FROM data_migration_validator_dev.test_megha.job_parameter_detail
             WHERE esp_job_id = '{esp_job_id}' 
             AND job_type = 'child'
             ORDER BY invocation_id
@@ -46,6 +62,8 @@ def get_job_details(spark, esp_job_id):
                 except:
                     print(f"Error parsing task parameters: {row.parameter_value}")
             
+            print(f"task_params: {task_params}")
+
             # Parse cluster details if they exist
             cluster_info = {}
             if row.cluster_details:
@@ -54,6 +72,8 @@ def get_job_details(spark, esp_job_id):
                 except:
                     print(f"Error parsing cluster details: {row.cluster_details}")
             
+            print(f"cluster_info: {cluster_info}")
+
             # Parse dependent libraries if they exist
             libraries = []
             if row.dependent_libraries:
@@ -62,6 +82,8 @@ def get_job_details(spark, esp_job_id):
                 except:
                     print(f"Error parsing dependent libraries: {row.dependent_libraries}")
             
+            print(f"libraries: {libraries}")
+
             child_jobs.append({
                 "job_id": row.job_id,
                 "invocation_id": row.invocation_id,

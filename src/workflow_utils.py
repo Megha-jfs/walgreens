@@ -12,20 +12,24 @@ def create_workflow_yaml(esp_job_id, parent_info, child_jobs, project_root_path=
         child_jobs (list): List of child job configurations
         project_root_path (str, optional): Root path of the project
     """
-    try:
-        # Set default project root path if not provided
-        if not project_root_path:
-            project_root_path = os.getcwd()
-            
+    try:            
         # Create resources directory if it doesn't exist
         resources_dir = os.path.join(project_root_path, "resources")
         os.makedirs(resources_dir, exist_ok=True)
         
         # Generate unique workflow name with timestamp
-        workflow_name = f"{esp_job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        workflow_name = f"{esp_job_id}"
+        print(f"parent_info: {parent_info}")
+        print(f"child_jobs: {child_jobs}")
+        print(f"project_root_path: {project_root_path}")
+
+        print(type(parent_info))
+        print(type(child_jobs))
         
         # Path for the job yml file
         job_yaml_path = os.path.join(resources_dir, f"{workflow_name}_job.yml")
+        
+        print(f"Writing job YAML to {job_yaml_path}")
         
         # Extract job parameters from parent
         job_parameters = []
@@ -35,6 +39,8 @@ def create_workflow_yaml(esp_job_id, parent_info, child_jobs, project_root_path=
                 "default": value
             })
         
+        print(f"Job parameters: {job_parameters}")
+
         # Initialize the job config
         job_config = {
             "resources": {
@@ -64,13 +70,21 @@ def create_workflow_yaml(esp_job_id, parent_info, child_jobs, project_root_path=
         # Add job clusters if any exist
         if job_clusters:
             job_config["resources"]["jobs"][workflow_name]["job_clusters"] = job_clusters
+
+        git_src = {"git_url": "https://github.com/Megha-jfs/walgreens.git",
+                    "git_provider": "GITHUB",
+                    "git_branch": "main"
+                }
+         
+        job_config["resources"]["jobs"][workflow_name]["git_source"] = git_src
         
         # Add batch check task as first task
         batch_check_task = {
             "task_key": "batch_check",
             "description": "Check for open batch",
             "notebook_task": {
-                "notebook_path": "/Shared/ProcessControl/notebooks/batch_check",
+                "notebook_path": "notebooks/fetch_open_batch",
+                "source": "GIT",
                 "base_parameters": {}
             },
             "timeout_seconds": 120,
@@ -88,9 +102,10 @@ def create_workflow_yaml(esp_job_id, parent_info, child_jobs, project_root_path=
             "task_key": "status_update_start",
             "description": "Mark job as running",
             "notebook_task": {
-                "notebook_path": "/Shared/ProcessControl/notebooks/status_update",
+                "notebook_path": "notebooks/update_job_execution_detail",
+                "source": "GIT",                
                 "base_parameters": {
-                    "status": "RUNNING"
+                    "status": "IN_PROGRESS"
                 }
             },
             "depends_on": [
@@ -119,7 +134,9 @@ def create_workflow_yaml(esp_job_id, parent_info, child_jobs, project_root_path=
                 "task_key": task_key,
                 "description": f"Execute task for {child['job_id']}",
                 "notebook_task": {
-                    "notebook_path": child["notebook_path"],
+                    #"notebook_path": child["notebook_path"],
+                    "notebook_path": "notebooks/runner_main",
+                    "source": "GIT",                    
                     "base_parameters": child.get("task_params", {})
                 },
                 "depends_on": [
@@ -148,7 +165,8 @@ def create_workflow_yaml(esp_job_id, parent_info, child_jobs, project_root_path=
             "task_key": "status_update_complete",
             "description": "Mark job as completed",
             "notebook_task": {
-                "notebook_path": "/Shared/ProcessControl/notebooks/status_update",
+                "notebook_path": "notebooks/update_job_execution_detail",
+                "source": "GIT",                
                 "base_parameters": {
                     "status": "COMPLETED"
                 }

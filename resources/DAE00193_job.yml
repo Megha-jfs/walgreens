@@ -2,11 +2,66 @@ resources:
   jobs:
     DAE00193:
       name: DAE00193
+      parameters:
+      - name: env
+        default: dev
+      - name: proj_id
+        default: hadoop_mna_prod
+      - name: dept_id
+        default: mna_cooked_rad_scm
+      - name: job_id
+        default: 300_rad_scm_daily_waterfall_refresh_master
+      tasks:
+      - task_key: batch_check
+        description: Check for open batch
+        notebook_task:
+          notebook_path: notebooks/fetch_open_batch
+          source: GIT
+          base_parameters: {}
+        timeout_seconds: 120
+        retry_on_timeout: false
+        job_cluster_key: DAE00193_job_cluster
+      - task_key: status_update_start
+        description: Mark job as running
+        notebook_task:
+          notebook_path: notebooks/update_job_execution_detail
+          source: GIT
+          base_parameters:
+            status: IN_PROGRESS
+        depends_on:
+        - task_key: batch_check
+        timeout_seconds: 120
+        retry_on_timeout: false
+        job_cluster_key: DAE00193_job_cluster
+      - task_key: execution_300_rad_scm_daily_waterfall_refresh_dashboard_new_30_days_1
+        description: Execute task for 300_rad_scm_daily_waterfall_refresh_dashboard_new_30_days
+        notebook_task:
+          notebook_path: notebooks/runner_main
+          source: GIT
+          base_parameters:
+            notebook_path: scripts/sqls/samplesqlscript1
+        depends_on:
+        - task_key: status_update_start
+        timeout_seconds: 7200
+        retry_on_timeout: false
+        job_cluster_key: DAE00193_job_cluster
+      - task_key: status_update_complete
+        description: Mark job as completed
+        notebook_task:
+          notebook_path: notebooks/update_job_execution_detail
+          source: GIT
+          base_parameters:
+            status: COMPLETED
+        depends_on:
+        - task_key: execution_300_rad_scm_daily_waterfall_refresh_dashboard_new_30_days_1
+        timeout_seconds: 120
+        retry_on_timeout: false
+        job_cluster_key: DAE00193_job_cluster
       job_clusters:
       - job_cluster_key: DAE00193_job_cluster
         new_cluster:
           spark_version: 15.4.x-scala2.12
-          ' azure_attributes':
+          azure_attributes:
             first_on_demand: 1
             availability: SPOT_WITH_FALLBACK_AZURE
             spot_bid_max_price: '-1'
@@ -23,105 +78,3 @@ resources:
         git_url: https://github.com/Megha-jfs/walgreens.git
         git_provider: GITHUB
         git_branch: main
-      tasks:
-      - task_key: fetch_open_batch
-        description: Check for open batch
-        notebook_task:
-          notebook_path: notebooks/fetch_open_batch
-          source: GIT
-        timeout_seconds: 120
-        retry_on_timeout: false
-        job_cluster_key: DAE00193_job_cluster
-      - task_key: update_job_execution_detail_inprogress
-        description: Mark job as inprogress
-        notebook_task:
-          notebook_path: notebooks/update_job_execution_detail
-          source: GIT
-          base_parameters:
-            status: IN_PROGRESS
-        depends_on:
-        - task_key: fetch_open_batch
-        timeout_seconds: 120
-        retry_on_timeout: false
-        job_cluster_key: DAE00193_job_cluster
-      - task_key: sql_execution_300_rad_scm_daily_waterfall_refresh_dashboard_new
-        description: Execute SQL for 300_rad_scm_daily_waterfall_refresh_dashboard_new
-        notebook_task:
-          notebook_path: notebooks/runner_main
-          source: GIT
-          base_parameters:
-            notebook_path: /Workspace/Users/megha.upadhyay@walgreens.com/ProcessCtrlFramework/sqls/samplesqlscript0
-        depends_on:
-        - task_key: update_job_execution_detail_inprogress
-        timeout_seconds: 7200
-        retry_on_timeout: false
-        job_cluster_key: DAE00193_job_cluster
-      - task_key: sql_execution_300_rad_scm_daily_waterfall_refresh_dashboard_new_30_days
-        description: Execute SQL for 300_rad_scm_daily_waterfall_refresh_dashboard_new_30_days
-        notebook_task:
-          notebook_path: notebooks/runner_main
-          source: GIT
-          base_parameters:
-            notebook_path: /Workspace/Users/megha.upadhyay@walgreens.com/ProcessCtrlFramework/sqls/samplesqlscript1
-        depends_on:
-        - task_key: sql_execution_300_rad_scm_daily_waterfall_refresh_dashboard_new
-        timeout_seconds: 7200
-        retry_on_timeout: false
-        job_cluster_key: DAE00193_job_cluster
-      - task_key: sql_execution_300_rad_scm_daily_waterfall_refresh_wag_pick_ship
-        description: Execute SQL for 300_rad_scm_daily_waterfall_refresh_wag_pick_ship
-        notebook_task:
-          notebook_path: notebooks/runner_main
-          source: GIT
-          base_parameters:
-            notebook_path: /Workspace/Users/megha.upadhyay@walgreens.com/ProcessCtrlFramework/sqls/samplesqlscript2
-        depends_on:
-        - task_key: sql_execution_300_rad_scm_daily_waterfall_refresh_dashboard_new_30_days
-        timeout_seconds: 7200
-        retry_on_timeout: false
-        job_cluster_key: DAE00193_job_cluster
-      - task_key: sql_execution_300_rad_scm_daily_waterfall_refresh_dashboard_promo_flag
-        description: Execute SQL for 300_rad_scm_daily_waterfall_refresh_dashboard_promo_flag
-        notebook_task:
-          notebook_path: notebooks/runner_main
-          source: GIT
-          base_parameters:
-            notebook_path: /Workspace/Users/megha.upadhyay@walgreens.com/ProcessCtrlFramework/sqls/samplesqlscript3
-        depends_on:
-        - task_key: sql_execution_300_rad_scm_daily_waterfall_refresh_wag_pick_ship
-        timeout_seconds: 7200
-        retry_on_timeout: false
-        job_cluster_key: DAE00193_job_cluster
-      - task_key: sql_execution_300_rad_scm_daily_waterfall_refresh_dashboard_new_sf
-        description: Execute SQL for 300_rad_scm_daily_waterfall_refresh_dashboard_new_sf
-        notebook_task:
-          notebook_path: notebooks/runner_main
-          source: GIT
-          base_parameters:
-            notebook_path: /Workspace/Users/megha.upadhyay@walgreens.com/ProcessCtrlFramework/sqls/samplesqlscript4
-        depends_on:
-        - task_key: sql_execution_300_rad_scm_daily_waterfall_refresh_dashboard_promo_flag
-        timeout_seconds: 7200
-        retry_on_timeout: false
-        job_cluster_key: DAE00193_job_cluster
-      - task_key: update_job_execution_detail_completed
-        description: Mark job as completed
-        notebook_task:
-          notebook_path: notebooks/update_job_execution_detail
-          source: GIT
-          base_parameters:
-            status: COMPLETED
-        depends_on:
-        - task_key: sql_execution_300_rad_scm_daily_waterfall_refresh_dashboard_new_sf
-        timeout_seconds: 120
-        retry_on_timeout: false
-        job_cluster_key: DAE00193_job_cluster
-      parameters:
-      - name: env
-        default: dev
-      - name: proj_id
-        default: hadoop_mna_prod
-      - name: dept_id
-        default: mna_cooked_rad_scm
-      - name: job_id
-        default: 300_rad_scm_daily_waterfall_refresh_master
