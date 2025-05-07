@@ -29,8 +29,6 @@ def get_job_details(spark, esp_job_id):
         print(f"dept_id: {dept_id}")
         print(f"job_id: {job_id}")
 
-        print(type(parent_row.parameter_value))
-
         # Get job parameters from parameter_value if it exists
         job_params = {}
         if parent_row.parameter_value:
@@ -40,12 +38,12 @@ def get_job_details(spark, esp_job_id):
                 print(f"Error parsing job parameters: {parent_row.parameter_value}")
         
         print(f"job_params: {job_params}")
-        print(type(job_params))
 
         # Get all child jobs
         child_df = spark.sql(f"""
             SELECT job_id, invocation_id, use_runner, notebook_path, 
-                  cluster_details, dependent_libraries, parameter_type, parameter_value
+                  cluster_details, dependent_libraries, parameter_type, parameter_value,
+                  task_name, depends_on
             FROM data_migration_validator_dev.test_megha.job_parameter_detail
             WHERE esp_job_id = '{esp_job_id}' 
             AND job_type = 'child'
@@ -84,14 +82,23 @@ def get_job_details(spark, esp_job_id):
             
             print(f"libraries: {libraries}")
 
+            depends_on = []
+            if row.depends_on:
+                try:
+                    depends_on = json.loads(row.depends_on)
+                except:
+                    print(f"Error parsing depends_on: {row.depends_on}")
+
+            print(f"depends_on: {depends_on}")
+
             child_jobs.append({
-                "job_id": row.job_id,
-                "invocation_id": row.invocation_id,
+                "task_name": row.task_name,
+                "depends_on": depends_on,   
                 "use_runner": row.use_runner,
                 "notebook_path": row.notebook_path,
                 "cluster_info": cluster_info,
                 "libraries": libraries,
-                "parameter_type": row.parameter_type,
+                # "parameter_type": row.parameter_type,
                 "task_params": task_params
             })
         

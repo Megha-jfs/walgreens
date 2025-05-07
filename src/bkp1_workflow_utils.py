@@ -22,9 +22,6 @@ def create_workflow_yaml(esp_job_id, parent_info, child_jobs, project_root_path=
         print(f"parent_info: {parent_info}")
         print(f"child_jobs: {child_jobs}")
         print(f"project_root_path: {project_root_path}")
-
-        print(type(parent_info))
-        print(type(child_jobs))
         
         # Path for the job yml file
         job_yaml_path = os.path.join(resources_dir, f"{workflow_name}_job.yml")
@@ -67,6 +64,7 @@ def create_workflow_yaml(esp_job_id, parent_info, child_jobs, project_root_path=
                     job_clusters.append(child["cluster_info"])
                     cluster_set.add(cluster_key)
         
+
         # Add job clusters if any exist
         if job_clusters:
             job_config["resources"]["jobs"][workflow_name]["job_clusters"] = job_clusters
