@@ -46,7 +46,7 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, p
                 # job_config["resources"]["jobs"][workflow_name]["parameters"] = [
                 #     {"name": k, "default": v} for k, v in job_params.items()
                 # ]
-                dynamic_param += [{"name": k, "default": v} for k, v in job_params.items()] #new imp
+                dynamic_params += [{"name": k, "default": v} for k, v in job_params.items()] #new imp
         else:
             job_params = {}
 
