@@ -62,7 +62,8 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, p
             "notebook_task": {
                 "notebook_path": "notebooks/update_job_execution_detail",
                 "source": "GIT",
-                "base_parameters": {"status": "IN_PROGRESS"}
+                "base_parameters": {"status": "IN_PROGRESS",
+                                    "error_message": ""}
             },
             "depends_on": [{"task_key": "batch_check"}],
             "timeout_seconds": 120
@@ -161,7 +162,8 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, p
             "notebook_task": {
                 "notebook_path": "notebooks/update_job_execution_detail",
                 "source": "GIT",
-                "base_parameters": {"status": "COMPLETED"}
+                "base_parameters": {"status": "COMPLETED",
+                                    "error_message": ""}
             },
             "depends_on": [{"task_key": task} for task in leaf_tasks],
             "timeout_seconds": 120
