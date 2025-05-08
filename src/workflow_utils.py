@@ -12,7 +12,7 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, p
         os.makedirs(resources_dir, exist_ok=True)
 
         # Generate workflow name
-        workflow_name = f"{esp_job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        workflow_name = f"{esp_job_id}"
         job_yaml_path = os.path.join(resources_dir, f"{workflow_name}_job.yml")
 
         # Initialize job configuration
