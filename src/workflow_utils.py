@@ -1,12 +1,11 @@
-# workflow_utils.py
 import os
 import yaml
-import json
 from datetime import datetime
+from typing import List, Dict
 
-def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, project_root_path: str) -> str:
+def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: List[dict], project_root_path: str) -> str:
     """
-    Create Databricks workflow YAML with complex dependencies including parallel paths.
+    Create Databricks workflow YAML handling both linear and complex dependencies
     """
     try:
         # Create resources directory
@@ -23,162 +22,60 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, p
                 "jobs": {
                     workflow_name: {
                         "name": workflow_name,
-                        "git_source": {
-                            "git_url": "https://github.com/Megha-jfs/walgreens.git",
-                            "git_provider": "GITHUB",
-                            "git_branch": "main"
-                        },
-                        "parameters": [],
                         "tasks": []
                     }
                 }
             }
         }
 
-        # Add job parameters from parent info (only at job level)
-        if parent_info.get("job_params"):
-            job_params = parent_info["job_params"]
-            if isinstance(job_params, dict):
-                job_config["resources"]["jobs"][workflow_name]["parameters"] = [
-                    {"name": k, "default": v} for k, v in job_params.items()
-                ]
-        else:
-            job_params = {}
-
         # Add batch check task
-        batch_check_task = {
-            "task_key": "batch_check",
-            "description": "Check for open batch",
-            "notebook_task": {
-                "notebook_path": "notebooks/fetch_open_batch",
-                "source": "GIT"
-            },
-            "timeout_seconds": 120
-        }
+        batch_check_task = _create_batch_check_task()
         job_config["resources"]["jobs"][workflow_name]["tasks"].append(batch_check_task)
 
         # Add status update task
-        status_task = {
-            "task_key": "status_update_in_progress",
-            "description": "Mark job as IN_PROGRESS",
-            "notebook_task": {
-                "notebook_path": "notebooks/update_job_execution_detail",
-                "source": "GIT",
-                "base_parameters": {"status": "IN_PROGRESS"}
-            },
-            "depends_on": [{"task_key": "batch_check"}],
-            "timeout_seconds": 120
-        }
+        status_task = _create_status_task("IN_PROGRESS", ["batch_check"])
         job_config["resources"]["jobs"][workflow_name]["tasks"].append(status_task)
 
-        # Process child jobs
+        # Process child jobs in two passes
+        task_registry = {}  # task_key -> task_config
+        cluster_registry = set()
         job_clusters = []
-        seen_clusters = set()
-        task_mapping = {}  # To track task keys for validation
-        
-        # First pass: Create all tasks without dependencies
+
+        # First pass: Create all tasks and clusters
         for child in child_jobs:
-            # Get set of job-level parameter keys
-            job_param_keys = set(job_params.keys())
-            # Only include task-specific parameters (exclude job params)
-            base_params = {k: v for k, v in child["task_params"].items() if k not in job_param_keys}
-
-            # For runner_main, always add notebook_path
-            if child["use_runner"]:
-                notebook_path = "notebooks/runner_main"
-                base_params["notebook_path"] = child["notebook_path"]
-            else:
-                notebook_path = child["notebook_path"]
-
-            # Create task configuration
-            task_config = {
-                "task_key": child["task_name"],
-                "description": f"Execute task: {child['task_name']}",
-                "notebook_task": {
-                    "notebook_path": notebook_path,
-                    "source": "GIT",
-                    "base_parameters": base_params
-                },
-                "timeout_seconds": 7200
-            }
-
-            # Add cluster configuration
-            if child.get("cluster_info") and "job_cluster_key" in child["cluster_info"]:
-                cluster_key = child["cluster_info"]["job_cluster_key"]
-                if cluster_key not in seen_clusters:
-                    job_clusters.append(child["cluster_info"])
-                    seen_clusters.add(cluster_key)
-                task_config["job_cluster_key"] = cluster_key
-
-            # Add libraries if specified
-            if child.get("libraries"):
-                task_config["libraries"] = [
-                    {"jar": lib} if lib.startswith("dbfs:") else {"pypi": {"package": lib}}
-                    for lib in child["libraries"]
-                ]
-
+            task_config = _create_child_task(child, parent_info.get("job_params", {}))
+            
+            # Register clusters
+            if "cluster_info" in child:
+                cluster_config = _process_cluster(child["cluster_info"], cluster_registry)
+                if cluster_config:
+                    job_clusters.append(cluster_config)
+                    task_config["job_cluster_key"] = cluster_config["job_cluster_key"]
+            
+            task_registry[child["task_name"]] = task_config
             job_config["resources"]["jobs"][workflow_name]["tasks"].append(task_config)
-            task_mapping[child["task_name"]] = task_config
-        
-        # Second pass: Process dependencies correctly
+
+        # Second pass: Process dependencies
+        all_dependencies = set()
         for child in child_jobs:
             task_key = child["task_name"]
-            task = next((t for t in job_config["resources"]["jobs"][workflow_name]["tasks"] 
-                        if t.get("task_key") == task_key), None)
+            task_config = task_registry.get(task_key)
             
-            if task:
-                # Get dependencies
-                depends_on = child.get("depends_on", [])
+            if task_config:
+                # Parse and validate dependencies
+                dependencies = _parse_dependencies(
+                    child.get("depends_on", []),
+                    task_registry,
+                    default_deps=["status_update_in_progress"]
+                )
                 
-                # Parse dependencies if string format
-                if isinstance(depends_on, str):
-                    # Handle different string formats:
-                    depends_on = depends_on.strip("[]").replace("'", "").replace('"', "")
-                    depends_on = [d.strip() for d in depends_on.split(",") if d.strip()]
-                
-                # If task has dependencies specified, use them
-                if depends_on:
-                    # Filter to only include valid task keys
-                    valid_deps = [dep for dep in depends_on 
-                                if dep in task_mapping or dep in ["batch_check", "status_update_in_progress"]]
-                    if valid_deps:
-                        task["depends_on"] = [{"task_key": dep} for dep in valid_deps]
-                    else:
-                        # Default to status_update_in_progress if no valid dependencies
-                        task["depends_on"] = [{"task_key": "status_update_in_progress"}]
-                else:
-                    # Default to status_update_in_progress for tasks with no deps
-                    task["depends_on"] = [{"task_key": "status_update_in_progress"}]
-        
-        # Find leaf tasks (tasks that no other task depends on)
-        all_dependencies = set()
-        for task in job_config["resources"]["jobs"][workflow_name]["tasks"]:
-            if "depends_on" in task:
-                all_dependencies.update([dep["task_key"] for dep in task["depends_on"]])
-        
-        # Tasks that are not dependencies of any other task are leaf tasks
-        leaf_tasks = [task["task_key"] for task in job_config["resources"]["jobs"][workflow_name]["tasks"] 
-                    if task["task_key"] not in all_dependencies 
-                    and task["task_key"] not in ["batch_check", "status_update_in_progress", "status_update_completed"]]
-        
-        # If no leaf tasks found, default to all script tasks
-        if not leaf_tasks:
-            leaf_tasks = [task["task_key"] for task in job_config["resources"]["jobs"][workflow_name]["tasks"]
-                        if task["task_key"] not in ["batch_check", "status_update_in_progress", "status_update_completed"]]
-        
-        # Add final status update task that depends on leaf tasks
-        final_status_task = {
-            "task_key": "status_update_completed",
-            "description": "Mark job as COMPLETED",
-            "notebook_task": {
-                "notebook_path": "notebooks/update_job_execution_detail",
-                "source": "GIT",
-                "base_parameters": {"status": "COMPLETED"}
-            },
-            "depends_on": [{"task_key": task} for task in leaf_tasks],
-            "timeout_seconds": 120
-        }
-        job_config["resources"]["jobs"][workflow_name]["tasks"].append(final_status_task)
+                if dependencies:
+                    task_config["depends_on"] = dependencies
+                    all_dependencies.update(dependencies)
+
+        # Add final status task
+        final_task = _create_final_status_task(task_registry, all_dependencies)
+        job_config["resources"]["jobs"][workflow_name]["tasks"].append(final_task)
 
         # Add job clusters if any
         if job_clusters:
@@ -188,9 +85,120 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, p
         with open(job_yaml_path, "w") as f:
             yaml.dump(job_config, f, default_flow_style=False, sort_keys=False)
 
-        print(f"Successfully created workflow YAML at {job_yaml_path}")
         return job_yaml_path
 
     except Exception as e:
-        print(f"Error creating workflow YAML: {str(e)}")
-        return None
+        print(f"Error creating workflow: {str(e)}")
+        raise
+
+def _create_batch_check_task() -> dict:
+    return {
+        "task_key": "batch_check",
+        "description": "Check for open batch",
+        "notebook_task": {
+            "notebook_path": "notebooks/fetch_open_batch",
+            "source": "GIT"
+        },
+        "timeout_seconds": 120
+    }
+
+def _create_status_task(status: str, dependencies: List[str]) -> dict:
+    return {
+        "task_key": f"status_update_{status.lower()}",
+        "description": f"Mark job as {status}",
+        "notebook_task": {
+            "notebook_path": "notebooks/update_job_execution_detail",
+            "source": "GIT",
+            "base_parameters": {"status": status}
+        },
+        "depends_on": [{"task_key": dep} for dep in dependencies],
+        "timeout_seconds": 120
+    }
+
+def _create_child_task(child: dict, job_params: dict) -> dict:
+    """Create individual task configuration"""
+    # Handle parameters
+    base_params = {
+        k: v for k, v in child.get("task_params", {}).items() 
+        if k not in job_params
+    }
+    
+    # Handle runner notebook
+    if child.get("use_runner"):
+        notebook_path = "notebooks/runner_main"
+        base_params["notebook_path"] = child["notebook_path"]
+    else:
+        notebook_path = child["notebook_path"]
+
+    # Build task config
+    task_config = {
+        "task_key": child["task_name"],
+        "description": f"Execute: {child['task_name']}",
+        "notebook_task": {
+            "notebook_path": notebook_path,
+            "source": "GIT",
+            "base_parameters": base_params
+        },
+        "timeout_seconds": 7200
+    }
+
+    # Add libraries
+    if child.get("libraries"):
+        task_config["libraries"] = [
+            {"whl": lib} if lib.endswith(".whl") else {"jar": lib}
+            for lib in child["libraries"]
+        ]
+
+    return task_config
+
+def _process_cluster(cluster_info: dict, registry: set) -> dict:
+    """Process cluster configuration with deduplication"""
+    cluster_key = cluster_info.get("job_cluster_key")
+    if cluster_key and cluster_key not in registry:
+        registry.add(cluster_key)
+        return {
+            "job_cluster_key": cluster_key,
+            "new_cluster": cluster_info["new_cluster"]
+        }
+    return None
+
+def _parse_dependencies(raw_deps, task_registry, default_deps=None) -> List[dict]:
+    """Parse and validate dependencies from various input formats"""
+    # Handle empty dependencies
+    if not raw_deps:
+        return [{"task_key": dep} for dep in default_deps] if default_deps else []
+
+    # Convert string to list if needed
+    if isinstance(raw_deps, str):
+        raw_deps = raw_deps.strip("[]").replace("'", "").split(",")
+        raw_deps = [d.strip() for d in raw_deps if d.strip()]
+
+    # Validate dependencies exist
+    valid_deps = []
+    for dep in raw_deps:
+        if dep in task_registry or dep in ["batch_check", "status_update_in_progress"]:
+            valid_deps.append({"task_key": dep})
+    
+    return valid_deps if valid_deps else [{"task_key": dep} for dep in default_deps]
+
+def _create_final_status_task(task_registry: dict, all_dependencies: set) -> dict:
+    """Create final status task depending on all leaf nodes"""
+    # Find leaf tasks (tasks not depended on by others)
+    all_tasks = set(task_registry.keys())
+    leaf_tasks = all_tasks - all_dependencies
+    
+    # If no leaf tasks found, default to all tasks
+    if not leaf_tasks:
+        leaf_tasks = all_tasks
+
+    return {
+        "task_key": "status_update_completed",
+        "description": "Mark job as COMPLETED",
+        "notebook_task": {
+            "notebook_path": "notebooks/update_job_execution_detail",
+            "source": "GIT",
+            "base_parameters": {"status": "COMPLETED"}
+        },
+        "depends_on": [{"task_key": task} for task in leaf_tasks],
+        "timeout_seconds": 120
+    }
