@@ -6,14 +6,17 @@ resources:
         git_url: https://github.com/Megha-jfs/walgreens.git
         git_provider: GITHUB
         git_branch: main
-      parameters: []
+      parameters:
+      - name: workflow_id
+        default: '{{job.id}}'
+      - name: run_id
+        default: '{{job.run_id}}'
       tasks:
       - task_key: batch_check
         description: Check for open batch
         notebook_task:
           notebook_path: notebooks/fetch_open_batch
           source: GIT
-        timeout_seconds: 120
       - task_key: status_update_in_progress
         description: Mark job as IN_PROGRESS
         notebook_task:
@@ -24,7 +27,6 @@ resources:
             error_message: ''
         depends_on:
         - task_key: batch_check
-        timeout_seconds: 120
       - task_key: samplepy0
         description: 'Execute task: samplepy0'
         notebook_task:
@@ -33,7 +35,6 @@ resources:
           base_parameters:
             catalog_name: dev
             schema_name: test_schema333
-        timeout_seconds: 7200
         job_cluster_key: DAE112_job_cluster
         depends_on:
         - task_key: status_update_in_progress
@@ -47,7 +48,6 @@ resources:
             error_message: ''
         depends_on:
         - task_key: samplepy0
-        timeout_seconds: 120
       job_clusters:
       - job_cluster_key: DAE112_job_cluster
         new_cluster:
