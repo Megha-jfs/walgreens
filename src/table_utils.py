@@ -8,7 +8,7 @@ def log_to_job_execution_detail(spark, batch_id, proj_id, dept_id, job_id, paren
         # Check if record exists
         job_exists_df = spark.sql(f"""
             SELECT 1 FROM data_migration_validator_dev.test_megha.job_execution_detail
-            WHERE batch_id = {batch_id} AND job_id = '{job_id}' --AND run_id = '{run_id}'
+            WHERE batch_id = {batch_id} AND job_id = '{job_id}' AND run_id = '{run_id}'
         """)
         
         if job_exists_df.count() > 0:
@@ -27,7 +27,7 @@ def log_to_job_execution_detail(spark, batch_id, proj_id, dept_id, job_id, paren
             if error_msg:
                 update_sql += f", error_message = '{error_msg}'"
                 
-            update_sql += f" WHERE batch_id = {batch_id} AND job_id = '{job_id}'" #AND run_id = '{run_id}'"
+            update_sql += f" WHERE batch_id = {batch_id} AND job_id = '{job_id}'" AND run_id = '{run_id}'"
             
             spark.sql(update_sql)
         else:        

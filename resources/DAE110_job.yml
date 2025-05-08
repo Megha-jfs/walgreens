@@ -7,6 +7,10 @@ resources:
         git_provider: GITHUB
         git_branch: main
       parameters:
+      - name: workflow_id
+        default: '{{job.id}}'
+      - name: run_id
+        default: '{{job.run_id}}'
       - name: env
         default: dev
       - name: proj_id

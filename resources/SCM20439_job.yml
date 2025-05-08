@@ -7,16 +7,16 @@ resources:
         git_provider: GITHUB
         git_branch: main
       parameters:
-      - name: PROJ_ID
-        default: Supply Chain
-      - name: DEPT_ID
-        default: SCM
-      - name: JOB_ID
-        default: SSIS
       - name: workflow_id
-        default: ''
+        default: '{{job.id}}'
       - name: run_id
-        default: ''
+        default: '{{job.run_id}}'
+      - name: proj_id
+        default: Supply Chain
+      - name: dept_id
+        default: SCM
+      - name: job_id
+        default: SSIS
       tasks:
       - task_key: batch_check
         description: Check for open batch
