@@ -21,6 +21,7 @@ resources:
           source: GIT
           base_parameters:
             status: IN_PROGRESS
+            error_message: ''
         depends_on:
         - task_key: batch_check
         timeout_seconds: 120
@@ -43,6 +44,7 @@ resources:
           source: GIT
           base_parameters:
             status: COMPLETED
+            error_message: ''
         depends_on:
         - task_key: samplepy0
         timeout_seconds: 120
