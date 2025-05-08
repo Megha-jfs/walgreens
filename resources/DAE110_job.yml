@@ -10,18 +10,17 @@ resources:
       - name: env
         default: dev
       - name: proj_id
-        default: testproj1
+        default: test0
       - name: dept_id
-        default: testdept1
+        default: test10
       - name: job_id
-        default: testjob1
+        default: test110
       tasks:
       - task_key: batch_check
         description: Check for open batch
         notebook_task:
           notebook_path: notebooks/fetch_open_batch
           source: GIT
-        timeout_seconds: 120
       - task_key: status_update_in_progress
         description: Mark job as IN_PROGRESS
         notebook_task:
@@ -32,7 +31,6 @@ resources:
             error_message: ''
         depends_on:
         - task_key: batch_check
-        timeout_seconds: 120
       - task_key: samplesqlscript1
         description: 'Execute task: samplesqlscript1'
         notebook_task:
@@ -42,7 +40,6 @@ resources:
             catalog_name: dev
             schema_name: test_schema1
             notebook_path: scripts/sqls/samplesqlscript1
-        timeout_seconds: 7200
         job_cluster_key: DAE110_job_cluster
         depends_on:
         - task_key: status_update_in_progress
@@ -55,7 +52,6 @@ resources:
             catalog_name: dev
             schema_name: test_schema2
             notebook_path: scripts/sqls/samplesqlscript2
-        timeout_seconds: 7200
         job_cluster_key: DAE110_job_cluster
         depends_on:
         - task_key: samplesqlscript1
@@ -69,7 +65,6 @@ resources:
             error_message: ''
         depends_on:
         - task_key: samplesqlscript2
-        timeout_seconds: 120
       job_clusters:
       - job_cluster_key: DAE110_job_cluster
         new_cluster:
