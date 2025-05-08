@@ -33,15 +33,24 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, p
             }
         }
 
+        # Add default job params
+        dynamic_params = [
+            {"name": "workflow_id", "default": "{{job.id}}"},
+            {"name": "run_id", "default": "{{job.run_id}}"}
+        ]
+
         # Add job parameters from parent info (only at job level)
         if parent_info.get("job_params"):
             job_params = parent_info["job_params"]
             if isinstance(job_params, dict):
-                job_config["resources"]["jobs"][workflow_name]["parameters"] = [
-                    {"name": k, "default": v} for k, v in job_params.items()
-                ]
+                # job_config["resources"]["jobs"][workflow_name]["parameters"] = [
+                #     {"name": k, "default": v} for k, v in job_params.items()
+                # ]
+                dynamic_param += [{"name": k, "default": v} for k, v in job_params.items()] #new imp
         else:
             job_params = {}
+
+        job_config["resources"]["jobs"][workflow_name]["parameters"] = dynamic_params #new imp
 
         # Add batch check task
         batch_check_task = {
