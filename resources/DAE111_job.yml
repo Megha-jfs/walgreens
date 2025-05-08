@@ -42,7 +42,7 @@ resources:
             schema_name: test_schema1122
             notebook_path: scripts/sqls/samplesqlscript3
         timeout_seconds: 7200
-        job_cluster_key: DAE110_job_cluster
+        job_cluster_key: DAE111_job_cluster
         depends_on:
         - task_key: status_update_in_progress
       - task_key: samplesqlscript1
@@ -55,7 +55,7 @@ resources:
             schema_name: test_schema111
             notebook_path: scripts/sqls/samplesqlscript1
         timeout_seconds: 7200
-        job_cluster_key: DAE110_job_cluster
+        job_cluster_key: DAE111_job_cluster
         depends_on:
         - task_key: status_update_in_progress
       - task_key: samplesqlscript2
@@ -68,9 +68,9 @@ resources:
             schema_name: test_schema1112
             notebook_path: scripts/sqls/samplesqlscript2
         timeout_seconds: 7200
-        job_cluster_key: DAE110_job_cluster
+        job_cluster_key: DAE111_job_cluster
         depends_on:
-        - task_key: status_update_in_progress
+        - task_key: samplesqlscript1
       - task_key: samplesqlscript4
         description: 'Execute task: samplesqlscript4'
         notebook_task:
@@ -81,9 +81,10 @@ resources:
             schema_name: test_schema1222
             notebook_path: scripts/sqls/samplesqlscript4
         timeout_seconds: 7200
-        job_cluster_key: DAE110_job_cluster
+        job_cluster_key: DAE111_job_cluster
         depends_on:
-        - task_key: status_update_in_progress
+        - task_key: samplesqlscript2
+        - task_key: samplesqlscript3
       - task_key: status_update_completed
         description: Mark job as COMPLETED
         notebook_task:
@@ -92,13 +93,10 @@ resources:
           base_parameters:
             status: COMPLETED
         depends_on:
-        - task_key: samplesqlscript3
-        - task_key: samplesqlscript1
-        - task_key: samplesqlscript2
         - task_key: samplesqlscript4
         timeout_seconds: 120
       job_clusters:
-      - job_cluster_key: DAE110_job_cluster
+      - job_cluster_key: DAE111_job_cluster
         new_cluster:
           spark_version: 15.4.x-scala2.12
           azure_attributes:

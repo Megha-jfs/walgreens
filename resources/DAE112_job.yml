@@ -1,20 +1,12 @@
 resources:
   jobs:
-    DAE110:
-      name: DAE110
+    DAE112:
+      name: DAE112
       git_source:
         git_url: https://github.com/Megha-jfs/walgreens.git
         git_provider: GITHUB
         git_branch: main
-      parameters:
-      - name: env
-        default: dev
-      - name: proj_id
-        default: testproj1
-      - name: dept_id
-        default: testdept1
-      - name: job_id
-        default: testjob1
+      parameters: []
       tasks:
       - task_key: batch_check
         description: Check for open batch
@@ -32,32 +24,18 @@ resources:
         depends_on:
         - task_key: batch_check
         timeout_seconds: 120
-      - task_key: samplesqlscript1
-        description: 'Execute task: samplesqlscript1'
+      - task_key: samplepy0
+        description: 'Execute task: samplepy0'
         notebook_task:
-          notebook_path: notebooks/runner_main
+          notebook_path: scripts/python/samplepy0
           source: GIT
           base_parameters:
             catalog_name: dev
-            schema_name: test_schema1
-            notebook_path: scripts/sqls/samplesqlscript1
+            schema_name: test_schema333
         timeout_seconds: 7200
-        job_cluster_key: DAE110_job_cluster
+        job_cluster_key: DAE112_job_cluster
         depends_on:
         - task_key: status_update_in_progress
-      - task_key: samplesqlscript2
-        description: 'Execute task: samplesqlscript2'
-        notebook_task:
-          notebook_path: notebooks/runner_main
-          source: GIT
-          base_parameters:
-            catalog_name: dev
-            schema_name: test_schema2
-            notebook_path: scripts/sqls/samplesqlscript2
-        timeout_seconds: 7200
-        job_cluster_key: DAE110_job_cluster
-        depends_on:
-        - task_key: samplesqlscript1
       - task_key: status_update_completed
         description: Mark job as COMPLETED
         notebook_task:
@@ -66,10 +44,10 @@ resources:
           base_parameters:
             status: COMPLETED
         depends_on:
-        - task_key: samplesqlscript2
+        - task_key: samplepy0
         timeout_seconds: 120
       job_clusters:
-      - job_cluster_key: DAE110_job_cluster
+      - job_cluster_key: DAE112_job_cluster
         new_cluster:
           spark_version: 15.4.x-scala2.12
           azure_attributes:
