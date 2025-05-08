@@ -50,8 +50,7 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, p
             "notebook_task": {
                 "notebook_path": "notebooks/fetch_open_batch",
                 "source": "GIT"
-            },
-            "timeout_seconds": 120
+            }
         }
         job_config["resources"]["jobs"][workflow_name]["tasks"].append(batch_check_task)
 
@@ -65,8 +64,7 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, p
                 "base_parameters": {"status": "IN_PROGRESS",
                                     "error_message": ""}
             },
-            "depends_on": [{"task_key": "batch_check"}],
-            "timeout_seconds": 120
+            "depends_on": [{"task_key": "batch_check"}]
         }
         job_config["resources"]["jobs"][workflow_name]["tasks"].append(status_task)
 
@@ -92,8 +90,7 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, p
                     "notebook_path": notebook_path,
                     "source": "GIT",
                     "base_parameters": base_params
-                },
-                "timeout_seconds": 7200
+                }
             }
 
             if child.get("cluster_info") and "job_cluster_key" in child["cluster_info"]:
@@ -165,8 +162,7 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: list, p
                 "base_parameters": {"status": "COMPLETED",
                                     "error_message": ""}
             },
-            "depends_on": [{"task_key": task} for task in leaf_tasks],
-            "timeout_seconds": 120
+            "depends_on": [{"task_key": task} for task in leaf_tasks]
         }
         job_config["resources"]["jobs"][workflow_name]["tasks"].append(final_status_task)
 
