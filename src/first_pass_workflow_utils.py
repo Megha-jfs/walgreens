@@ -13,8 +13,10 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: List[di
         os.makedirs(resources_dir, exist_ok=True)
 
         # Generate workflow name
-        workflow_name = f"{esp_job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        workflow_name = f"{esp_job_id}"
         job_yaml_path = os.path.join(resources_dir, f"{workflow_name}_job.yml")
+
+        print(f"Generating workflow YAML for job {workflow_name}")
 
         # Initialize job configuration
         job_config = {
@@ -32,12 +34,16 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: List[di
         batch_check_task = _create_batch_check_task()
         job_config["resources"]["jobs"][workflow_name]["tasks"].append(batch_check_task)
 
+        print(f"Added batch check task to workflow {workflow_name}. Job config is: {job_config}")
+
         # Add status update task
         status_task = _create_status_task("IN_PROGRESS", ["batch_check"])
         job_config["resources"]["jobs"][workflow_name]["tasks"].append(status_task)
 
+        print(f"Added status update task to workflow {workflow_name}. Job config is: {job_config}")
+
         # Process child jobs in two passes
-        task_registry = {}  # task_key -> task_config
+        task_registry = {}  
         cluster_registry = set()
         job_clusters = []
 
@@ -55,31 +61,47 @@ def create_workflow_yaml(esp_job_id: str, parent_info: dict, child_jobs: List[di
             task_registry[child["task_name"]] = task_config
             job_config["resources"]["jobs"][workflow_name]["tasks"].append(task_config)
 
+            print(f"Added task to workflow {workflow_name}. Job config is: {job_config}")
+
         # Second pass: Process dependencies
         all_dependencies = set()
         for child in child_jobs:
             task_key = child["task_name"]
-            task_config = task_registry.get(task_key)
-            
-            if task_config:
-                # Parse and validate dependencies
-                dependencies = _parse_dependencies(
-                    child.get("depends_on", []),
-                    task_registry,
-                    default_deps=["status_update_in_progress"]
-                )
+            task = next((t for t in job_config["resources"]["jobs"][workflow_name]["tasks"] if t.get("task_key") == task_key), None)
+            if task:
+                depends_on = child.get("depends_on", [])
+
+                processed_deps = []
+                if isinstance(depends_on, str):
+                    depends_on = depends_on.strip("[]").replace("'", "").replace('"', "")
+                    depends_on = [d.strip() for d in depends_on.split(",") if d.strip()]
                 
-                if dependencies:
-                    task_config["depends_on"] = dependencies
-                    all_dependencies.update(dependencies)
+                for dep in depends_on:
+                    if isinstance(dep, dict):
+                        processed_deps.append(dep.get("task_key",""))
+                    else:
+                        processed_deps.append(str(dep))
+                
+                valid_deps = [dep for dep in processed_deps if dep and (dep in task_mapping or dep in ["batch_check", "status_update_in_progress"])]
+
+                if valid_deps:
+                    task["depends_on"] = [{"task_key": dep} for dep in valid_deps]  
+                    all_dependencies.update(valid_deps)
+                else:
+                    task["depends_on"] = [{"task_key": "status_update_in_progress"}]  
+                    all_dependencies.add("status_update_in_progress")
+                
 
         # Add final status task
         final_task = _create_final_status_task(task_registry, all_dependencies)
         job_config["resources"]["jobs"][workflow_name]["tasks"].append(final_task)
 
+        print(f"Added final status task to workflow {workflow_name}. Job config is: {job_config}")
+
         # Add job clusters if any
         if job_clusters:
             job_config["resources"]["jobs"][workflow_name]["job_clusters"] = job_clusters
+
 
         # Write YAML file
         with open(job_yaml_path, "w") as f:
@@ -161,25 +183,6 @@ def _process_cluster(cluster_info: dict, registry: set) -> dict:
             "new_cluster": cluster_info["new_cluster"]
         }
     return None
-
-def _parse_dependencies(raw_deps, task_registry, default_deps=None) -> List[dict]:
-    """Parse and validate dependencies from various input formats"""
-    # Handle empty dependencies
-    if not raw_deps:
-        return [{"task_key": dep} for dep in default_deps] if default_deps else []
-
-    # Convert string to list if needed
-    if isinstance(raw_deps, str):
-        raw_deps = raw_deps.strip("[]").replace("'", "").split(",")
-        raw_deps = [d.strip() for d in raw_deps if d.strip()]
-
-    # Validate dependencies exist
-    valid_deps = []
-    for dep in raw_deps:
-        if dep in task_registry or dep in ["batch_check", "status_update_in_progress"]:
-            valid_deps.append({"task_key": dep})
-    
-    return valid_deps if valid_deps else [{"task_key": dep} for dep in default_deps]
 
 def _create_final_status_task(task_registry: dict, all_dependencies: set) -> dict:
     """Create final status task depending on all leaf nodes"""
