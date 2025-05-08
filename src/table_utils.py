@@ -27,7 +27,7 @@ def log_to_job_execution_detail(spark, batch_id, proj_id, dept_id, job_id, paren
             if error_msg:
                 update_sql += f", error_message = '{error_msg}'"
                 
-            update_sql += f" WHERE batch_id = {batch_id} AND job_id = '{job_id}'" AND run_id = '{run_id}'"
+            update_sql += f" WHERE batch_id = {batch_id} AND job_id = '{job_id}' AND run_id = '{run_id}'"
             
             spark.sql(update_sql)
         else:        
