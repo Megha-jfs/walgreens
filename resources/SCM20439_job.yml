@@ -1,0 +1,83 @@
+resources:
+  jobs:
+    SCM20439:
+      name: SCM20439
+      git_source:
+        git_url: https://github.com/Megha-jfs/walgreens.git
+        git_provider: GITHUB
+        git_branch: main
+      parameters:
+      - name: PROJ_ID
+        default: Supply Chain
+      - name: DEPT_ID
+        default: SCM
+      - name: JOB_ID
+        default: SSIS
+      - name: workflow_id
+        default: ''
+      - name: run_id
+        default: ''
+      tasks:
+      - task_key: batch_check
+        description: Check for open batch
+        notebook_task:
+          notebook_path: notebooks/fetch_open_batch
+          source: GIT
+      - task_key: status_update_in_progress
+        description: Mark job as IN_PROGRESS
+        notebook_task:
+          notebook_path: notebooks/update_job_execution_detail
+          source: GIT
+          base_parameters:
+            status: IN_PROGRESS
+            error_message: ''
+        depends_on:
+        - task_key: batch_check
+      - task_key: RDI_caller
+        description: 'Execute task: RDI_caller'
+        notebook_task:
+          notebook_path: notebooks/RDI_caller
+          source: GIT
+          base_parameters: {}
+        job_cluster_key: SCM20439_job_cluster
+        depends_on:
+        - task_key: status_update_in_progress
+      - task_key: samplesqlscript1
+        description: 'Execute task: samplesqlscript1'
+        notebook_task:
+          notebook_path: notebooks/runner_main
+          source: GIT
+          base_parameters:
+            catalog_name: dev
+            schema_name: test_schema2
+            notebook_path: scripts/sqls/samplesqlscript1
+        job_cluster_key: SCM20439_job_cluster
+        depends_on:
+        - task_key: RDI_caller
+      - task_key: status_update_completed
+        description: Mark job as COMPLETED
+        notebook_task:
+          notebook_path: notebooks/update_job_execution_detail
+          source: GIT
+          base_parameters:
+            status: COMPLETED
+            error_message: ''
+        depends_on:
+        - task_key: samplesqlscript1
+      job_clusters:
+      - job_cluster_key: SCM20439_job_cluster
+        new_cluster:
+          spark_version: 15.4.x-scala2.12
+          azure_attributes:
+            first_on_demand: 1
+            availability: SPOT_WITH_FALLBACK_AZURE
+            spot_bid_max_price: '-1'
+          node_type_id: Standard_D4ds_v5
+          spark_env_vars:
+            PYSPARK_PYTHON: /databricks/python3/bin/python3
+          enable_elastic_disk: 'true'
+          data_security_mode: USER_ISOLATION
+          runtime_engine: STANDARD
+          autoscale:
+            min_workers: 2
+            max_workers: 4
