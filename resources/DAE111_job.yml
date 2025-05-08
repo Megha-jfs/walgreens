@@ -42,9 +42,9 @@ resources:
             schema_name: test_schema1122
             notebook_path: scripts/sqls/samplesqlscript3
         timeout_seconds: 7200
+        job_cluster_key: DAE110_job_cluster
         depends_on:
         - task_key: status_update_in_progress
-        job_cluster_key: DAE110_job_cluster
       - task_key: samplesqlscript1
         description: 'Execute task: samplesqlscript1'
         notebook_task:
@@ -55,9 +55,9 @@ resources:
             schema_name: test_schema111
             notebook_path: scripts/sqls/samplesqlscript1
         timeout_seconds: 7200
-        depends_on:
-        - task_key: samplesqlscript3
         job_cluster_key: DAE110_job_cluster
+        depends_on:
+        - task_key: status_update_in_progress
       - task_key: samplesqlscript2
         description: 'Execute task: samplesqlscript2'
         notebook_task:
@@ -68,9 +68,9 @@ resources:
             schema_name: test_schema1112
             notebook_path: scripts/sqls/samplesqlscript2
         timeout_seconds: 7200
-        depends_on:
-        - task_key: samplesqlscript1
         job_cluster_key: DAE110_job_cluster
+        depends_on:
+        - task_key: status_update_in_progress
       - task_key: samplesqlscript4
         description: 'Execute task: samplesqlscript4'
         notebook_task:
@@ -81,9 +81,9 @@ resources:
             schema_name: test_schema1222
             notebook_path: scripts/sqls/samplesqlscript4
         timeout_seconds: 7200
-        depends_on:
-        - task_key: samplesqlscript2
         job_cluster_key: DAE110_job_cluster
+        depends_on:
+        - task_key: status_update_in_progress
       - task_key: status_update_completed
         description: Mark job as COMPLETED
         notebook_task:
@@ -92,6 +92,9 @@ resources:
           base_parameters:
             status: COMPLETED
         depends_on:
+        - task_key: samplesqlscript3
+        - task_key: samplesqlscript1
+        - task_key: samplesqlscript2
         - task_key: samplesqlscript4
         timeout_seconds: 120
       job_clusters:
